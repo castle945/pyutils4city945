@@ -1,1 +1,1 @@
-from .common_utils import rpc_func
+from .common_utils import *
