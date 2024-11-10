@@ -154,6 +154,54 @@ def cloud_player(root=None, pattern="*", num_features=4,
     
     open3d_utils.playcloud(switch, length, start=start, step=step)
 
+
+@rpc_func
+def plot_tsne2d(features, labels, 
+    x="x", y="y", title="T-SNE",
+    rpc=False):
+    """
+    Args:
+        features: (N, M), N 个归一化的样本，每个 M 维
+        labels: (N, ) 聚类标签
+    """
+    from sklearn.manifold import TSNE
+    import numpy as np
+    import pandas as pd
+    import seaborn
+    import matplotlib.pyplot as plt
+
+    if features.shape[1] > 2:
+        tsne = TSNE(n_components=2, init='pca', random_state=0)
+        features = tsne.fit_transform(features)
+
+    df = pd.DataFrame({'x': features[:, 0], 'y': features[:, 1], 'label': labels})
+    seaborn.scatterplot(
+        data=df, x=x, y=y, hue=df.label, 
+        palette=seaborn.color_palette("hls", len(np.unique(labels))),
+    ).set(title=title)
+    plt.show()
+@rpc_func
+def plot_umap(features, labels, 
+    x="x", y="y", title="T-SNE",
+    rpc=False):
+    # 与 t-SNE 相比，它在保持数据全局结构方面更加出色，但更慢
+    # see https://umap-learn.readthedocs.io/en/latest/auto_examples/plot_mnist_example.html
+    import umap # pip install umap-learn
+    import numpy as np
+    import pandas as pd
+    import seaborn
+    import matplotlib.pyplot as plt
+
+    if features.shape[1] > 2:
+        features = umap.UMAP(random_state=0).fit_transform(features)
+
+    df = pd.DataFrame({'x': features[:, 0], 'y': features[:, 1], 'label': labels})
+    seaborn.scatterplot(
+        data=df, x=x, y=y, hue=df.label, 
+        palette=seaborn.color_palette("hls", len(np.unique(labels))),
+    ).set(title=title)
+    plt.show()
+
 def det3d_test_data():
     from pu4c.common.utils import TestDataDB
     return TestDataDB(dbname="det3d_test_data")
