@@ -18,3 +18,15 @@
     twine upload dist/*
     pip install pu4c -i https://pypi.org/simple
     ```
+
+### 使用说明
+
+- 服务器端数据在本地界面中可视化
+    ```bash
+    # 本地计算机作为 RPC 服务端
+    python -c "import pu4c; pu4c.common.app.start_rpc_server()"
+    ssh user@ip -R 30570:localhost:30570 # SSH 转发并在使用过程中保持终端 ssh 连接不断开，端口配置位于 `pu4c/common/config.py` ，参数 -R remote_port:localhost:local_port
+    # 服务器作为 RPC 客户端，可在交互式终端（如调试终端）中使用
+    import pu4c
+    pu4c.det3d.app.cloud_viewer(filepath="/datasets/KITTI/object/training/velodyne/000000.bin", num_features=4, rpc=True) # 置 rpc=True 进行远程函数调用
+    ```
