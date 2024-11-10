@@ -8,8 +8,8 @@ with open("README.md", "r") as fh:
 
 setup(
     name="pu4c",
-    version="1.1.0",
-    packages=find_packages(include=['pu4c']),
+    version="1.1.2",
+    packages=find_packages(exclude=["tests"]),
     author="city945",
     author_email="city945@njust.edu.cn",
     url="https://github.com/city945",
