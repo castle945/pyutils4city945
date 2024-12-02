@@ -1,3 +1,4 @@
+from . import config
 from pu4c.common.utils import rpc_func
 
 # 点云可视化
@@ -117,7 +118,7 @@ def cloud_viewer_panels(points_list=None, point_labels_list=None, boxes3d_list=N
     vis.run()
     vis.destroy_window()
 @rpc_func
-def cloud_player(root=None, pattern="*", num_features=4, 
+def cloud_player(root=None, pattern="*", num_features=4, filepaths=None,
     points_list=None, boxes3d_list=None, 
     cloud_uniform_color=None, show_axis=True,
     start=0, step=10, 
@@ -126,26 +127,28 @@ def cloud_player(root=None, pattern="*", num_features=4,
     点云播放器，支持播放点云目录与点云列表
     Examples:
         pu4c.det3d.app.cloud_player(root="/datasets/KITTI/object/training/velodyne/", num_features=4, pattern="*.bin")
+        pu4c.det3d.app.cloud_player(filepaths=filepaths, num_features=5, boxes3d_list=boxes3d_list, cloud_uniform_color=[0.99, 0.99, 0.99], rpc=True)
     Keys:
         A/D: pre/next one frame
         W/S: pre/next step frame
     """
     from glob import glob
-    from .utils import common_utils, open3d_utils
+    from .utils import open3d_utils
 
-    assert (root is not None) or (points_list is not None)
+    assert (root is not None) or (filepaths is not None) or (points_list is not None)
     if root is not None:
         filepaths = sorted(glob(f'{root}/{pattern}'))
-    length = len(points_list) if root is None else len(filepaths)
+    length = len(points_list) if filepaths is None else len(filepaths)
 
     def switch(vis, i):
         vis.clear_geometries()
         print_msg = f"frame {i}" if root is None else f"frame {i}: {filepaths[i]}"
         print(print_msg)
         cloud_viewer(
-            filepath=None if root is None else filepaths[i],
+            filepath=None if filepaths is None else filepaths[i],
             points=None if points_list is None else points_list[i],
             boxes3d=None if boxes3d_list is None else boxes3d_list[i],
+            num_features=num_features,
             cloud_uniform_color=cloud_uniform_color, 
             vis=vis, show_axis=show_axis, run=False, 
             )
@@ -202,6 +205,6 @@ def plot_umap(features, labels,
     ).set(title=title)
     plt.show()
 
-def det3d_test_data():
+def det3d_test_data(root=config.test_data_root):
     from pu4c.common.utils import TestDataDB
-    return TestDataDB(dbname="det3d_test_data")
+    return TestDataDB(dbname="det3d_test_data", root=root)

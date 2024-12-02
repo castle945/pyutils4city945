@@ -14,7 +14,7 @@ def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, uniform_
     elif uniform_color is not None: cloud.paint_uniform_color(uniform_color)
     
     return cloud
-def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], colormap=None, show_heading=True):
+def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], show_heading=True):
     """
     Args:
         boxes3d: (N, 7)[xyz,lwh,yaw] or (N, 8)[xyz,lwh,yaw,cls]
@@ -30,9 +30,13 @@ def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], colormap=None, 
     line_sets = o3d.geometry.LineSet()
     line_sets.points = o3d.open3d.utility.Vector3dVector(corners.reshape((-1, 3)))
     line_sets.lines = o3d.open3d.utility.Vector2iVector(boxes3d_lines.reshape((-1, 2)))
-    if C == 7: line_sets.paint_uniform_color(uniform_color)
+    if C == 7: 
+        line_sets.paint_uniform_color(uniform_color)
     else:
-        colormap = color_utils.color_rings7_det if colormap is None else colormap
+        if np.max(boxes3d[:, 7]) < 25:
+            colormap = color_utils.color_det_class25
+        else:
+            raise ValueError("Number of classes is bigger than number of colors")
         box3d_colors = np.array(colormap)[boxes3d[:, 7].astype(np.int64)]
         boxes3d_colors = box3d_colors[:, None, :].repeat(boxes3d_lines.shape[1], axis=1) # (N, 12, 3)
         line_sets.colors = o3d.utility.Vector3dVector(boxes3d_colors.reshape((-1, 3)))
