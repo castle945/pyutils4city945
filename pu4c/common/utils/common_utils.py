@@ -1,6 +1,6 @@
 import rpyc, pickle
 import os
-from pu4c.common.config import rpc_server_ip, rpc_server_port
+from pu4c.common.config import rpc_server_ip, rpc_server_port, cache_dir
 
 def rpc_func(func):
     def wrapper(*args, **kwargs):
@@ -27,7 +27,7 @@ def write_pickle(filepath, data):
     with open(filepath, "wb") as f:
         pickle.dump(data, f)
 class TestDataDB:
-    def __init__(self, dbname="pu4c_test_data", root="/tmp/pu4c"):
+    def __init__(self, dbname="pu4c_test_data", root=cache_dir):
         mainfile = dbname + '.pkl'
         mainpath = os.path.join(root, mainfile)
         if not os.path.exists(mainpath):
