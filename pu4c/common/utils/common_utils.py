@@ -1,6 +1,6 @@
 import rpyc, pickle
 import os
-from pu4c.common.config import rpc_server_ip, rpc_server_port
+from pu4c.common.config import rpc_server_ip, rpc_server_port, cache_dir
 
 def rpc_func(func):
     def wrapper(*args, **kwargs):
@@ -27,7 +27,7 @@ def write_pickle(filepath, data):
     with open(filepath, "wb") as f:
         pickle.dump(data, f)
 class TestDataDB:
-    def __init__(self, dbname="pu4c_test_data", root="/tmp/pu4c"):
+    def __init__(self, dbname="pu4c_test_data", root=cache_dir):
         mainfile = dbname + '.pkl'
         mainpath = os.path.join(root, mainfile)
         if not os.path.exists(mainpath):
@@ -38,9 +38,8 @@ class TestDataDB:
         self.mainpath = mainpath
         self.filesize = 1 * 1024**3
         self.keys_dict = read_pickle(mainpath)["keys_dict"]
-    def get(self, key):
-        assert key in self.keys_dict
-        return read_pickle(os.path.join(self.root, self.keys_dict[key]))[key] # 如果某个测试需要一批多个数据，则将其打包作为数据库的一项
+    def get(self, key, default=None):
+        return read_pickle(os.path.join(self.root, self.keys_dict[key]))[key] if key in self.keys_dict else default # 如果某个测试需要一批多个数据，则将其打包作为数据库的一项
     def add(self, key, data):
         if key in self.keys_dict: return
         maindata = read_pickle(self.mainpath)
