@@ -23,6 +23,7 @@ def cloud_viewer(filepath=None, num_features=4, transmat=None,          # read_p
     Args:
         cloud_uniform_color: 自定义纯色点云颜色，例如白色 [1,1,1]
         cloud_colormap: 点云标签颜色表
+        points: (N, 3)[x,y,z] or (N, 4)[x,y,z,i] 当 point_labels 为 None 时，如果 (N, 4) 则按反射率着色否则 open3d 默认按照高度着色
         boxes3d: (N, 7)[xyz,lwh,yaw] or (N, 8)[xyz,lwh,yaw,cls]
         show_axis: 是否绘制坐标轴，如果不绘制那么会自动调整观察视角
         rpc: False 本地执行，True 远程执行

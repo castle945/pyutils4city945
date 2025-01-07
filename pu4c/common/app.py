@@ -1,4 +1,4 @@
-from .config import rpc_server_ip, rpc_server_port
+from . import config as cfg
 
 def start_rpc_server():
     import rpyc, pickle
@@ -25,7 +25,7 @@ def start_rpc_server():
             args, kwargs = pickle.loads(serialized_args), pickle.loads(serialized_kwargs)
             return pickle.dumps(plot_umap(*args, **kwargs))
 
-    server = ThreadedServer(RPCService, port=rpc_server_port, auto_register=True)
+    server = ThreadedServer(RPCService, port=cfg.rpc_server_port, auto_register=True)
     server.start()
 
 def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, has_complex_type=False):
