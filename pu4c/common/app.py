@@ -1,9 +1,10 @@
-from .config import rpc_server_ip, rpc_server_port
+from . import config as cfg
 
 def start_rpc_server():
     import rpyc, pickle
     from rpyc.utils.server import ThreadedServer
-    from pu4c.det3d.app import cloud_viewer, voxel_viewer, cloud_viewer_panels, cloud_player, plot_tsne2d, plot_umap
+    from pu4c.det3d.app import cloud_viewer, voxel_viewer, cloud_viewer_panels, cloud_player, \
+                               image_viewer, plot_tsne2d, plot_umap
     class RPCService(rpyc.Service):
         def exposed_cloud_viewer(self, serialized_args, serialized_kwargs):
             args, kwargs = pickle.loads(serialized_args), pickle.loads(serialized_kwargs)
@@ -18,6 +19,10 @@ def start_rpc_server():
             args, kwargs = pickle.loads(serialized_args), pickle.loads(serialized_kwargs)
             return pickle.dumps(cloud_player(*args, **kwargs))
 
+        def exposed_image_viewer(self, serialized_args, serialized_kwargs):
+            args, kwargs = pickle.loads(serialized_args), pickle.loads(serialized_kwargs)
+            return pickle.dumps(image_viewer(*args, **kwargs))
+
         def exposed_plot_tsne2d(self, serialized_args, serialized_kwargs):
             args, kwargs = pickle.loads(serialized_args), pickle.loads(serialized_kwargs)
             return pickle.dumps(plot_tsne2d(*args, **kwargs))
@@ -25,7 +30,7 @@ def start_rpc_server():
             args, kwargs = pickle.loads(serialized_args), pickle.loads(serialized_kwargs)
             return pickle.dumps(plot_umap(*args, **kwargs))
 
-    server = ThreadedServer(RPCService, port=rpc_server_port, auto_register=True)
+    server = ThreadedServer(RPCService, port=cfg.rpc_server_port, auto_register=True)
     server.start()
 
 def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, has_complex_type=False):

@@ -1,4 +1,4 @@
-import rpyc, pickle
+import rpyc, pickle, json
 import os
 from pu4c.common.config import rpc_server_ip, rpc_server_port, cache_dir
 
@@ -21,26 +21,47 @@ def rpc_func(func):
 
 def read_pickle(filepath):
     with open(filepath, 'rb') as f:
-       data = pickle.load(f)
+        data = pickle.load(f)
     return data
 def write_pickle(filepath, data):
     with open(filepath, "wb") as f:
         pickle.dump(data, f)
+def read_json(filepath):
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+    return data
+def write_json(filepath, data, indent=None):
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=indent)
 class TestDataDB:
+    """
+    1. 简单的键值数据库，可用于存储测试数据，其中使用 json 文件存储数据的键值-路径对，使用 pickle 文件存储键值-数据对
+    2. json 文件可编辑，删除条目并运行 gc 方法进行垃圾回收
+    3. 建议压缩保存为 .pkl.tgz 文件以进行文件传输
+    """
     def __init__(self, dbname="pu4c_test_data", root=cache_dir):
-        mainfile = dbname + '.pkl'
-        mainpath = os.path.join(root, mainfile)
-        if not os.path.exists(mainpath):
-            write_pickle(mainpath, data={"keys_dict": {}})
-        
+        self.dbname = dbname
         self.root = root
-        self.mainfile = mainfile
-        self.mainpath = mainpath
+
+        keys_file = dbname + '.keys.json'   # 键值对文件
+        main_file = dbname + '.pkl'         # 主数据文件
+        keys_path = os.path.join(root, keys_file)
+        main_path = os.path.join(root, main_file)
+        if os.path.exists(os.path.join(root, dbname + '.pkl.tgz')) and not os.path.exists(keys_path):
+            self.restore()
+        if not os.path.exists(keys_path):
+            write_json(keys_path, {}, indent=4)
+        if not os.path.exists(main_path):
+            write_pickle(main_path, {})
+        self.main_file = main_file
+        self.main_path = main_path
+        self.keys_path = keys_path
+        self.keys_dict = read_json(keys_path)
         self.filesize = 1 * 1024**3
-        self.keys_dict = read_pickle(mainpath)["keys_dict"]
     def get(self, key, default=None):
         return read_pickle(os.path.join(self.root, self.keys_dict[key]))[key] if key in self.keys_dict else default # 如果某个测试需要一批多个数据，则将其打包作为数据库的一项
-    def add(self, key, data):
+    def set(self, key, data):
+        # 键值存在则更新数据
         if key in self.keys_dict:
             filepath = os.path.join(self.root, self.keys_dict[key])
             filedata = read_pickle(filepath)
@@ -49,60 +70,78 @@ class TestDataDB:
             print(f"update {key}, data at {filepath}")
             return
 
-        maindata = read_pickle(self.mainpath)
-        maindata["keys_dict"][key] = self.keys_dict[key] = self.mainfile
+        # 键值不存在则添加数据
+        self.keys_dict[key] = self.main_file
+        write_json(self.keys_path, self.keys_dict, indent=4)
+        maindata = read_pickle(self.main_path)
         maindata[key] = data
-        write_pickle(self.mainpath, data=maindata)
+        write_pickle(self.main_path, data=maindata)
 
-        if os.path.getsize(self.mainpath) > self.filesize:
+        if os.path.getsize(self.main_path) > self.filesize:
             # 主文件过大时则将主文件重命名为新文件，并更新 keys_dict
-            # 新文件中不删除 keys_dict 则在不进行删改数据库的情况下，也可以视作当前时间的备份
             from datetime import datetime
             now = datetime.now()
             timestamp = f"-{now.year % 100}{now.month:02d}{now.day:02d}"
-            newfile = self.mainfile[:-len('.pkl')] + timestamp + '.pkl'
+            newfile = self.main_file[:-len('.pkl')] + timestamp + '.pkl'
             
-            if os.system(f"cp {os.path.join(self.root, self.mainfile)} {os.path.join(self.root, newfile)}") != 0:
+            if os.system(f"cp {os.path.join(self.root, self.main_file)} {os.path.join(self.root, newfile)}") != 0:
                 raise Exception(f"create new file {newfile} failed")
             print(f"create new file {newfile}")
             # udpate key
-            maindata["keys_dict"].update({key:newfile for key, val in maindata["keys_dict"].items() if val == self.mainfile})
-            self.keys_dict = new_keys_dict = maindata["keys_dict"]
-            write_pickle(self.mainpath, data={"keys_dict": new_keys_dict})
+            self.keys_dict.update({key:newfile for key, val in self.keys_dict.items() if val == self.main_file})
+            write_json(self.keys_path, self.keys_dict, indent=4)
+            write_pickle(self.main_path, {})
+            
+
     def remove(self, key):
         assert key in self.keys_dict
         filepath = os.path.join(self.root, self.keys_dict[key])
         # remove key
-        maindata = read_pickle(self.mainpath)
-        maindata["keys_dict"].pop(key)
         self.keys_dict.pop(key)
+        write_json(self.keys_path, self.keys_dict, indent=4)
         # remove data
-        if filepath == self.mainpath:
-            maindata.pop(key)
-            write_pickle(self.mainpath, maindata)
-        else:
-            write_pickle(self.mainpath, maindata)
-            filedata = read_pickle(filepath)
-            filedata.pop(key)
-            write_pickle(filepath, filedata)
+        filedata = read_pickle(filepath)
+        filedata.pop(key)
+        write_pickle(filepath, filedata)
         print(f"remove {key}, data at {filepath}")
     def rename(self, key, new_key):
         assert key in self.keys_dict
         filepath = os.path.join(self.root, self.keys_dict[key])
         # rename key
-        maindata = read_pickle(self.mainpath)
-        self.keys_dict[new_key] = maindata["keys_dict"][new_key] = maindata["keys_dict"][key]
-        maindata["keys_dict"].pop(key)
+        self.keys_dict[new_key] = self.keys_dict[key]
         self.keys_dict.pop(key)
+        write_json(self.keys_path, self.keys_dict, indent=4)
         # rename data
-        if filepath == self.mainpath:
-            maindata[new_key] = maindata[key]
-            maindata.pop(key)
-            write_pickle(self.mainpath, maindata)
-        else:
-            write_pickle(self.mainpath, maindata)
-            filedata = read_pickle(filepath)
-            filedata[new_key] = filedata[key]
-            filedata.pop(key)
-            write_pickle(filepath, filedata)
+        filedata = read_pickle(filepath)
+        filedata[new_key] = filedata[key]
+        filedata.pop(key)
+        write_pickle(filepath, filedata)
         print(f"rename {key} to {new_key}, data at {filepath}")
+    def gc(self):
+        import glob
+        files = glob.glob(f'{self.root}/{self.dbname}*.pkl')
+        for file in files:
+            filepath = os.path.join(self.root, file)
+            filedata = read_pickle(filepath)
+            keys = list(filedata.keys())
+            [filedata.pop(key) for key in keys if key not in self.keys_dict]
+            if filedata:
+                write_pickle(filepath, filedata)
+            else:
+                if os.system(f"rm -f {filepath}") != 0:
+                    raise Exception(f"remove file {filepath} failed")
+                print(f"remove file {filepath} successed")
+    def archive(self):
+        if os.name == 'posix':
+            cmd = f"cd {self.root} && tar -zcf {self.dbname}.pkl.tgz {self.dbname}.keys.json {self.dbname}*.pkl"
+            if os.system(cmd) != 0:
+                raise Exception(f"{cmd} failed")
+        elif os.name == 'nt':
+            raise Exception("Windows is not supported")
+    def restore(self):
+        if os.name == 'posix':
+            cmd = f"cd {self.root} && tar -zxf {self.dbname}.pkl.tgz"
+            if os.system(cmd) != 0:
+                raise Exception(f"{cmd} failed")
+        elif os.name == 'nt':
+            raise Exception("Windows is not supported")
