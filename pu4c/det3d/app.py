@@ -23,6 +23,7 @@ def cloud_viewer(filepath=None, num_features=4, transmat=None,          # read_p
     Args:
         cloud_uniform_color: 自定义纯色点云颜色，例如白色 [1,1,1]
         cloud_colormap: 点云标签颜色表
+        points: (N, 3)[x,y,z] or (N, 4)[x,y,z,i] 当 point_labels 为 None 时，如果 (N, 4) 则按反射率着色否则 open3d 默认按照高度着色
         boxes3d: (N, 7)[xyz,lwh,yaw] or (N, 8)[xyz,lwh,yaw,cls]
         show_axis: 是否绘制坐标轴，如果不绘制那么会自动调整观察视角
         rpc: False 本地执行，True 远程执行
@@ -157,6 +158,28 @@ def cloud_player(root=None, pattern="*", num_features=4, filepaths=None,
     
     open3d_utils.playcloud(switch, length, start=start, step=step)
 
+# 图片可视化
+@rpc_func
+def image_viewer(filepath=None, data=None, rpc=False):
+    """
+    Args:
+        data: (H, W, C) 图片数据
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.image import imread
+    import time
+    import numpy as np
+    if data is None:
+        assert filepath is not None
+        data = imread(filepath)
+    else:
+        data = np.array(data, dtype=np.int32) # 只能可视化整型数据
+    height, width = data.shape[:2]
+    fig = plt.figure(figsize=(width, height), dpi=1)
+    ax = fig.add_axes([0, 0, 1, 1]) # axes 是 figure 的内容，这里填充满 figure
+    ax.imshow(data)
+    ax.axis('off')
+    plt.show() # cv2 可视化更方便但连续远程调用该函数会卡死
 
 @rpc_func
 def plot_tsne2d(features, labels, 

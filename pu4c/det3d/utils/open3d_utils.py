@@ -12,6 +12,9 @@ def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, uniform_
         colors = np.array(colormap)[labels.astype(np.int64)]
         cloud.colors = o3d.utility.Vector3dVector(colors)
     elif uniform_color is not None: cloud.paint_uniform_color(uniform_color)
+    elif points.shape[1] == 4:
+        colors = color_utils.rviz_intensity_colormap(points[:, 3], out_norm=True)
+        cloud.colors = o3d.utility.Vector3dVector(colors)
     
     return cloud
 def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], show_heading=True):
