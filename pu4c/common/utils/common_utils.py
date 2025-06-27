@@ -1,12 +1,12 @@
-import rpyc, pickle, json
-import os
-from pu4c.common.config import rpc_server_ip, rpc_server_port, cache_dir
+import rpyc
+import pickle, json, os
+import pu4c.config as cfg
 
 def rpc_func(func):
     def wrapper(*args, **kwargs):
         if ('rpc' in kwargs) and kwargs['rpc']:
             kwargs['rpc'] = False
-            conn = rpyc.connect(rpc_server_ip, rpc_server_port)
+            conn = rpyc.connect(cfg.rpc_server_ip, cfg.rpc_server_port)
             remote_method = getattr(conn.root, func.__name__, None)
             if remote_method:
                 serialized_rets = remote_method(pickle.dumps(args), pickle.dumps(kwargs))
@@ -17,7 +17,6 @@ def rpc_func(func):
         else:
             return func(*args, **kwargs) # python 中会为无返回值的函数返回 None
     return wrapper
-
 
 def read_pickle(filepath):
     with open(filepath, 'rb') as f:
@@ -33,13 +32,14 @@ def read_json(filepath):
 def write_json(filepath, data, indent=None):
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=indent)
+
 class TestDataDB:
     """
     1. 简单的键值数据库，可用于存储测试数据，其中使用 json 文件存储数据的键值-路径对，使用 pickle 文件存储键值-数据对
     2. json 文件可编辑，删除条目并运行 gc 方法进行垃圾回收
     3. 建议压缩保存为 .pkl.tgz 文件以进行文件传输
     """
-    def __init__(self, dbname="pu4c_test_data", root=cache_dir):
+    def __init__(self, dbname="pu4c_test_data", root=cfg.cache_dir):
         self.dbname = dbname
         self.root = root
 
@@ -120,8 +120,8 @@ class TestDataDB:
     def gc(self):
         import glob
         files = glob.glob(f'{self.root}/{self.dbname}*.pkl')
-        for file in files:
-            filepath = os.path.join(self.root, file)
+        deleted_files = []
+        for filepath in files:
             filedata = read_pickle(filepath)
             keys = list(filedata.keys())
             [filedata.pop(key) for key in keys if key not in self.keys_dict]
@@ -130,7 +130,10 @@ class TestDataDB:
             else:
                 if os.system(f"rm -f {filepath}") != 0:
                     raise Exception(f"remove file {filepath} failed")
+                deleted_files.append(filepath)
                 print(f"remove file {filepath} successed")
+        write_json(self.keys_path, self.keys_dict, indent=4) # 写键，键和数据必须同时操作
+        return deleted_files
     def archive(self):
         if os.name == 'posix':
             cmd = f"cd {self.root} && tar -zcf {self.dbname}.pkl.tgz {self.dbname}.keys.json {self.dbname}*.pkl"
@@ -145,3 +148,46 @@ class TestDataDB:
                 raise Exception(f"{cmd} failed")
         elif os.name == 'nt':
             raise Exception("Windows is not supported")
+    def cat(self, dbname, root, keys: list = None):
+        """拼接另外的数据库到当前数据库"""
+        datadb = TestDataDB(dbname=dbname, root=root)
+        if keys is None:
+            cat_keys_dict = datadb.keys_dict
+        else:
+            cat_keys_dict = {k:v for k,v in datadb.keys_dict.items() if k in keys}
+        # 检查键是否冲突
+        conflict_keys = set(self.keys_dict.keys()) & set(cat_keys_dict.keys())
+        if conflict_keys:
+            raise Exception(f"Conflict keys: {conflict_keys}")
+        for key, filepath in cat_keys_dict.items():
+            data = read_pickle(os.path.join(root, filepath))[key]
+            self.set(key, data)
+
+def convert_type(data, typeinfo=False):
+    """
+    将复杂数据类型转至多包含 ndarray 的简单数据类型
+    Args:
+        typeinfo: 是否保留原始类型信息
+    """
+    if isinstance(data, dict):
+        return {k:convert_type(v, typeinfo) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [convert_type(i, typeinfo) for i in data]
+    elif isinstance(data, tuple):
+        return tuple([convert_type(i, typeinfo) for i in list(data)]) # 转成 list 才支持遍历
+    elif 'torch.Tensor' in str(type(data)):
+        newdata = data.detach().cpu().numpy()
+        return (f'original type, {str(type(data))}', newdata) if typeinfo else newdata
+    elif 'DataContainer' in str(type(data)):
+        # 见于 mmlab1.0 的 mmcv 中的数据结构
+        newdata = (f'original type, {str(type(data))}', data.data) if typeinfo else data.data
+        return convert_type(newdata, typeinfo) # 还没结束，其数据可能是 dict 等，故仍需递归
+    elif 'BaseDataElement' in str(data.__class__.__mro__): # 该类的继承关系，即数据是 BaseDataElement 及其子类的实例
+        # 见于 mmlab2.0 的 mmengine 中的数据结构
+        newdata = (f'original type, {str(type(data))}', data.to_dict()) if typeinfo else data.to_dict()
+        return convert_type(newdata, typeinfo)
+    elif hasattr(data, '__dict__'):
+        # 未知的类实例，则转成字典继续转换，常规用法定义的类都有该方法并可以通过 vars 转成字典
+        newdata = (f'original type, {type(data)}', vars(data)) if typeinfo else vars(data)
+        return convert_type(newdata, typeinfo)
+    return data

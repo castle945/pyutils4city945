@@ -31,8 +31,6 @@ color_det_class25 = [
 
 def plot_color_list(color_rgb_list, strip_height=10, width=100):
     from matplotlib import pyplot as plt
-    import numpy as np
-
     height = len(color_rgb_list) * strip_height
     img_grey = np.zeros((height, width, 1), dtype=np.uint8)
     color_idx = 0

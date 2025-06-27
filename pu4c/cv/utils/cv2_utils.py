@@ -1,9 +1,9 @@
 import numpy as np
 import cv2
 
-def image_enhancement(data, rgb=True, linear_stretch=False, brightness=None, contrast=None, saturation=None, hue=None):
+def photo_metric_distortion(data, rgb=True, linear_stretch=False, brightness=None, contrast=None, saturation=None, hue=None):
     """
-    图像处理之图像增强
+    图像处理之光度失真
     Args:
         linear_stretch: 是否对增强后的数据，值域线性拉伸到 [0, 255]
         brightness: 亮度绝对差值，正数调亮负数调暗
@@ -32,10 +32,3 @@ def image_enhancement(data, rgb=True, linear_stretch=False, brightness=None, con
     else:
         data_bgr = data_bgr.astype(np.int32)
     return data_bgr[:, :, ::-1] if rgb else data_bgr
-
-def center_crop(data, crop_width, crop_height):
-    height, width, _ = data.shape
-    start_x = (width - crop_width) // 2
-    start_y = (height - crop_height) // 2
-    cropped_image = data[start_y:start_y + crop_height, start_x:start_x + crop_width, :]
-    return cropped_image
