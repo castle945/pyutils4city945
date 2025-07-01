@@ -4,21 +4,14 @@ from .utils.common_utils import rpc_func, convert_type
 def start_rpc_server():
     import rpyc, pickle
     from rpyc.utils.server import ThreadedServer
-    from pu4c.cv.app import cloud_viewer, voxel_viewer, cloud_viewer_panels, cloud_player, \
-                               image_viewer, plot_tsne2d, plot_umap
+    from pu4c.cv import rpc_func_dict as cv_rpc_func_dict
     class RPCService(rpyc.Service):
         def __init__(self):
             super().__init__()
             self.func_map = {
-                'cloud_viewer': cloud_viewer,
-                'voxel_viewer': voxel_viewer,
-                'cloud_viewer_panels': cloud_viewer_panels,
-                'cloud_player': cloud_player,
-                'image_viewer': image_viewer,
-                'plot_tsne2d': plot_tsne2d,
-                'plot_umap': plot_umap,
                 'printds': printds,
             }
+            self.func_map.update(cv_rpc_func_dict)
             for name, func in self.func_map.items():
                 setattr(self.__class__, f'exposed_{name}', self._create_exposed_method(name, func))
 
@@ -122,6 +115,11 @@ def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, complex_type=
                                   f"data1: {var1[idx]}\n" \
                                   f"data2: {var2[idx]}\n"
             return True, reason
+
+        if isinstance(var1, float) and tol is not None:
+            return (True, reason) if abs(var1 - var2) <= tol[0] + tol[1] * abs(var2) else (False, f"{reason}: 值不相等\n" \
+                                                                                                  f"data1: {var1}\n" \
+                                                                                                  f"data2: {var2}\n")
 
         # 其他类型，直接比较
         return (True, reason) if var1 == var2 else (False, f"{reason}: 值不相等\n" \

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="pu4c",
-    version="1.3.0",
+    version="1.3.1",
     packages=find_packages(exclude=["tests"]),
     author="city945",
     author_email="city945@njust.edu.cn",
