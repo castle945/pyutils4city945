@@ -9,3 +9,7 @@ dist/
 
 output*/
 .trash/
+
+work_dirs/
+data/
+.coverage

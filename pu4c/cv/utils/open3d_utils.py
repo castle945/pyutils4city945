@@ -1,6 +1,9 @@
 import open3d as o3d
 import numpy as np
-from pu4c.det3d.utils import common_utils, color_utils
+from . import (
+    boxes3d_to_corners, get_oriented_bounding_box_lines, 
+    color_det_class25, rviz_intensity_colormap, 
+)
 
 def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, uniform_color=None, colormap=None):
     cloud = o3d.geometry.PointCloud()
@@ -13,7 +16,7 @@ def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, uniform_
         cloud.colors = o3d.utility.Vector3dVector(colors)
     elif uniform_color is not None: cloud.paint_uniform_color(uniform_color)
     elif points.shape[1] == 4:
-        colors = color_utils.rviz_intensity_colormap(points[:, 3], out_norm=True)
+        colors = rviz_intensity_colormap(points[:, 3], out_norm=True)
         cloud.colors = o3d.utility.Vector3dVector(colors)
     
     return cloud
@@ -24,8 +27,8 @@ def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], show_heading=Tr
     """
     # 计算角点与线框
     N, C = boxes3d.shape
-    corners = common_utils.boxes3d_to_corners(boxes3d) # (N, 8, 3)
-    box3d_lines = np.array(common_utils.get_oriented_bounding_box_lines(head_cross_lines=show_heading)) # (12, 2)
+    corners = boxes3d_to_corners(boxes3d) # (N, 8, 3)
+    box3d_lines = np.array(get_oriented_bounding_box_lines(head_cross_lines=show_heading)) # (12, 2)
     boxes3d_lines = box3d_lines[None, :].repeat(N, axis=0) # (N, 12, 2) 此时其中每个顶点的编号都是相对于该框的相对编号，范围 [0,7]
     offsets = np.arange(start=0, stop=N * 8, step=8)[:, None, None] # (N, 1, 1)
     boxes3d_lines = boxes3d_lines + offsets # 顶点编号加偏移得到唯一的顶点编号，以便与顶点相对应
@@ -37,7 +40,7 @@ def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], show_heading=Tr
         line_sets.paint_uniform_color(uniform_color)
     else:
         if np.max(boxes3d[:, 7]) < 25:
-            colormap = color_utils.color_det_class25
+            colormap = color_det_class25
         else:
             raise ValueError("Number of classes is bigger than number of colors")
         box3d_colors = np.array(colormap)[boxes3d[:, 7].astype(np.int64)]

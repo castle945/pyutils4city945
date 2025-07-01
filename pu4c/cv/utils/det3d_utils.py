@@ -1,50 +1,7 @@
+# 三维目标检测相关工具函数
 import numpy as np
-import os
 import copy
 
-
-def read_points(filepath, num_features=4, transmat=None):
-    """
-    Args:
-        transmat: 4x4 变换矩阵，某些点云可能希望直接进行坐标变换
-    """
-    filetype = os.path.splitext(filepath)[-1]
-    if filetype == ".bin":
-        points = np.fromfile(filepath, dtype=np.float32).reshape(-1, num_features)
-    elif filetype == ".pcd" or filetype == '.ply':
-        import open3d as o3d
-        points = np.asarray(o3d.io.read_point_cloud(filepath).points)
-    elif filetype == ".npy":
-        points = np.load(filepath)
-    elif filetype == ".pkl" or filetype == ".gz": # '.pkl.gz'
-        import pandas as pd
-        points = pd.read_pickle(filepath).to_numpy()
-    elif filetype == ".txt":
-        points = np.loadtxt(filepath, dtype=np.float32).reshape(-1, num_features)
-    else:
-        raise TypeError("unsupport file type")
-
-    if transmat is not None:
-        points[:, :3] = (transmat[:3, :3] @ points[:, :3].T +  transmat[:3, [3]]).T
-
-    return points
-
-def transform_matrix(rotation_mat, translation, inverse: bool = False) -> np.ndarray:
-    """
-    返回变换矩阵或变换矩阵的逆，要求传入的旋转矩阵和平移向量必须是有实际意义的(即从 3x4 矩阵中拿到的)，而不能对任意矩阵求逆
-    """
-    tm = np.eye(4)
-
-    if inverse:
-        rot_inv = rotation_mat.T
-        trans = np.transpose(-np.array(translation))
-        tm[:3, :3] = rot_inv
-        tm[:3, 3] = rot_inv.dot(trans)
-    else:
-        tm[:3, :3] = rotation_mat
-        tm[:3, 3] = np.transpose(np.array(translation))
-
-    return tm
 def limit_period(val,
                  offset: float = 0.5,
                  period: float = np.pi):
@@ -63,6 +20,18 @@ def limit_period(val,
     limited_val = val - np.floor(val / period + offset) * period
     return limited_val
 
+def rotate_points_along_z(points, angle):
+    cosa = np.cos(angle)
+    sina = np.sin(angle)
+    zeros = np.zeros(points.shape[0])
+    ones = np.ones(points.shape[0])
+    rot_matrix = np.stack((
+        cosa,  sina, zeros,
+        -sina, cosa, zeros,
+        zeros, zeros, ones
+    ), axis=1).reshape(-1, 3, 3)
+    points_rot = points[:, :, :3] @ rot_matrix
+    return points_rot
 def boxes3d_to_corners(boxes3d):
     """
              4-------- 6
@@ -99,18 +68,6 @@ def corners_to_boxes3d(corners):
     yaw = np.arctan2(corners[:, 1, 1] - corners[:, 0, 1], corners[:, 1, 0] - corners[:, 0, 0])
     return np.hstack([centers, dims, yaw[:, np.newaxis]])
 
-def rotate_points_along_z(points, angle):
-    cosa = np.cos(angle)
-    sina = np.sin(angle)
-    zeros = np.zeros(points.shape[0])
-    ones = np.ones(points.shape[0])
-    rot_matrix = np.stack((
-        cosa,  sina, zeros,
-        -sina, cosa, zeros,
-        zeros, zeros, ones
-    ), axis=1).reshape(-1, 3, 3)
-    points_rot = points[:, :, :3] @ rot_matrix
-    return points_rot
 def mask_points_and_boxes_outside_range(points, limit_range, boxes3d=None):
     point_mask = (points[:, 0] >= limit_range[0]) & (points[:, 0] <= limit_range[3]) \
            & (points[:, 1] >= limit_range[1]) & (points[:, 1] <= limit_range[4])

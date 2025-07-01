@@ -1,2 +1,3 @@
-from . import common
-from . import det3d
+from . import config
+from .common import *
+from .cv import *
