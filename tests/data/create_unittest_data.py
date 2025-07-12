@@ -31,7 +31,7 @@ def mmdet3d_kitti_000008():
     gt_boxes_lidar[:, 2] += (gt_boxes_lidar[:, 5] / 2)
     boxes3d = gt_boxes_lidar
     labels = np.array([obj['bbox_label_3d'] for obj in info['instances'] if obj['bbox_label_3d'] != -1])
-    datadb.set('mmdet3d/kitti_000008', [points, image, calib, boxes3d, labels]) 
+    datadb.set('mmdet3d/kitti/000008', [points, image, calib, boxes3d, labels]) 
 
 def semantickitti_000000():
     from pu4c.config import semantickitti_learning_map as learning_map 
