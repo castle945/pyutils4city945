@@ -3,12 +3,15 @@ import numpy as np
 # 投影
 def project_points_to_pixels(points, image_shape, transform_mat):
     """
-    y = Rx 即 y(4,N) = transform_mat @ (4, N) 即 y(N,4) = (N,4) @ transform_mat.T
+    坐标变换公式: 
+        (1) 变换矩阵形式: y(4,N) = R(4,4)*x(4,N) 变换矩阵同理定义为右乘列向量的点坐标的增广，不一定是正交阵，往往对公式转置一下以适应点云输入，即 y.T(N,4) = x.T(N,4)*R.T(4,4)
+        (2) 旋转矩阵加平移向量形式: y(3,N) = R(3,3)*x(3,N) + t(3,1) 平移向量为列向量，旋转矩阵也定义为右乘列向量的点坐标，旋转矩阵为正交阵具有转置等于逆和行列式为 1 的特性
     Args:
-        transform_mat: 4x4 激光雷达坐标系到像素坐标系的变换矩阵，它等于 相机内参矩阵 @ 激光雷达到相机坐标系的变换矩阵
+        points: (N, 3)
+        transform_mat: (4, 4) 激光雷达坐标系到像素坐标系的变换矩阵，它等于 相机内参矩阵 @ 激光雷达到相机坐标系的变换矩阵
     """
     points_hom = np.hstack((points[:, :3], np.ones((points.shape[0], 1), dtype=np.float32))) # [N, 4]
-    points_pixel = (points_hom @ transform_mat.T)[:, :3]
+    points_pixel = points_hom @ np.ascontiguousarray(transform_mat.T)[:, :3] # 老版本 numpy 数组转置后内存不连续，从而导致计算错误，故需要再转成内存连续后再计算
     
     pixels_depth = points_pixel[:, 2]
     pixels = (points_pixel[:, :2].T / points_pixel[:, 2]).T # (N, 2)[col, row]
@@ -33,7 +36,7 @@ def project_pixels_to_points(pixels, depth, transform_mat):
     points_cam[:, :2] = pixels * depth[:, np.newaxis].repeat(2, axis=1)
 
     points_cam_hom = np.hstack((points_cam, np.ones((N, 1), dtype=np.float32))) # [N, 4]
-    points_hom = points_cam_hom @ transform_mat.T
+    points_hom = points_cam_hom @ np.ascontiguousarray(transform_mat.T)
     return points_hom[:, :3]
 def project_points_to_pixels_cv2(points, image_shape, lidar2cam_mat, intrinsics_4x4, dist_coeffs):
     """

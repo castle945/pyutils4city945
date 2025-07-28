@@ -23,14 +23,12 @@ def limit_period(val,
 def rotate_points_along_z(points, angle):
     cosa = np.cos(angle)
     sina = np.sin(angle)
-    zeros = np.zeros(points.shape[0])
-    ones = np.ones(points.shape[0])
-    rot_matrix = np.stack((
-        cosa,  sina, zeros,
-        -sina, cosa, zeros,
-        zeros, zeros, ones
-    ), axis=1).reshape(-1, 3, 3)
-    points_rot = points[:, :, :3] @ rot_matrix
+    rot_matrix = np.array([
+        [cosa,  sina, 0],
+        [-sina, cosa, 0],
+        [    0,    0, 1],
+    ])
+    points_rot = points[:, :3] @ rot_matrix
     return points_rot
 def boxes3d_to_corners(boxes3d):
     """

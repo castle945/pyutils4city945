@@ -4,21 +4,14 @@ from .utils.common_utils import rpc_func, convert_type
 def start_rpc_server():
     import rpyc, pickle
     from rpyc.utils.server import ThreadedServer
-    from pu4c.cv.app import cloud_viewer, voxel_viewer, cloud_viewer_panels, cloud_player, \
-                               image_viewer, plot_tsne2d, plot_umap
+    from pu4c.cv import rpc_func_dict as cv_rpc_func_dict
     class RPCService(rpyc.Service):
         def __init__(self):
             super().__init__()
             self.func_map = {
-                'cloud_viewer': cloud_viewer,
-                'voxel_viewer': voxel_viewer,
-                'cloud_viewer_panels': cloud_viewer_panels,
-                'cloud_player': cloud_player,
-                'image_viewer': image_viewer,
-                'plot_tsne2d': plot_tsne2d,
-                'plot_umap': plot_umap,
                 'printds': printds,
             }
+            self.func_map.update(cv_rpc_func_dict)
             for name, func in self.func_map.items():
                 setattr(self.__class__, f'exposed_{name}', self._create_exposed_method(name, func))
 
@@ -53,17 +46,20 @@ def create_logger(log_file=None):
     logger.propagate = False
     return logger
 
-def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, complex_type=False):
+def deep_equal(var1, var2, tol=None, ignore_keys=[], ignore_indices=[], complex_type=False):
     """
     比较两个复杂变量是否相等，支持 dict, list, ndarray 等类型的嵌套
     Args:
-        ignore_keys: list, 忽略字典中的键
+        ignore_keys: list, 忽略字典中的键，即某些无关紧要的项
+        ignore_indices: list of list, 忽略列表或元组中某些索引，即某些无关紧要的异常值，例如 [1,[2,[3,4]]] 表示忽略掉遇到的第一层列表下标为 1 的项、第二层列表下标为 2 的项、第三层列表下标为 3,4 的项
         tol: tuple, (atol, rtol) 数值比较的容忍度
         complex_type: 是否为复杂数据类型，即包括非 Python 内置类型或 numpy 类型
     """
     import numpy as np
+    import rich
+    import math
 
-    def deep_equal_with_reason(var1, var2, reason):
+    def deep_equal_with_reason(var1, var2, reason, ignore_indices):
         # 比较数据类型
         if type(var1) != type(var2):
             return False, f"{reason}: 类型不一致\n" \
@@ -81,7 +77,7 @@ def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, complex_type=
                               f"key2: {var2.keys()}\n"
             
             for k in var1.keys():
-                is_equal, reason = deep_equal_with_reason(var1[k], var2[k], reason)
+                is_equal, reason = deep_equal_with_reason(var1[k], var2[k], reason, ignore_indices)
                 if not is_equal:
                     return False, f"['{k}']{reason}"
             return True, reason
@@ -93,8 +89,17 @@ def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, complex_type=
                               f"len1: {len(var1)}\n" \
                               f"len2: {len(var2)}\n"
             
+            cur_ignore_indices, next_ignore_indices = [], []
+            for idx in ignore_indices:
+                if isinstance(idx, list):
+                    next_ignore_indices = idx
+                else:
+                    cur_ignore_indices.append(idx)
             for i, (x, y) in enumerate(zip(var1, var2)):
-                is_equal, reason = deep_equal_with_reason(x, y, reason)
+                if i in cur_ignore_indices:
+                    print(f'skip idx {i}')
+                    continue
+                is_equal, reason = deep_equal_with_reason(x, y, reason, ignore_indices=next_ignore_indices)
                 if not is_equal:
                     return False, f"[{i}]{reason}"
             return True, reason
@@ -123,6 +128,14 @@ def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, complex_type=
                                   f"data2: {var2[idx]}\n"
             return True, reason
 
+        if isinstance(var1, float) and tol is not None:
+            return (True, reason) if abs(var1 - var2) <= tol[0] + tol[1] * abs(var2) else (False, f"{reason}: 值不相等\n" \
+                                                                                                  f"data1: {var1}\n" \
+                                                                                                  f"data2: {var2}\n")
+
+        if isinstance(var1, (int, float)) and math.isnan(var1) and math.isnan(var2):
+            return (True, reason)
+
         # 其他类型，直接比较
         return (True, reason) if var1 == var2 else (False, f"{reason}: 值不相等\n" \
                                                            f"data1: {var1}\n" \
@@ -130,9 +143,9 @@ def deep_equal(var1, var2, tol=None, ignore_keys=[], verbose=True, complex_type=
 
     if complex_type:
         var1, var2 = convert_type(var1), convert_type(var2)
-    is_equal, reason = deep_equal_with_reason(var1, var2, reason='')
-    if not is_equal and verbose:
-        print(f"reason: {reason}")
+    is_equal, reason = deep_equal_with_reason(var1, var2, reason='', ignore_indices=ignore_indices)
+    if not is_equal:
+        rich.print(f"reason: {reason}")
     return is_equal
 @rpc_func
 def printds(data, complex_type=False, reduce=True, decimals=2, max_len=10, rpc=False):

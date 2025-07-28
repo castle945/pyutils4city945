@@ -18,11 +18,11 @@ def rpc_func(func):
             return func(*args, **kwargs) # python 中会为无返回值的函数返回 None
     return wrapper
 
-def read_pickle(filepath):
+def read_pickle(filepath=cfg.cache_pkl):
     with open(filepath, 'rb') as f:
         data = pickle.load(f)
     return data
-def write_pickle(filepath, data):
+def write_pickle(data, filepath=cfg.cache_pkl):
     with open(filepath, "wb") as f:
         pickle.dump(data, f)
 def read_json(filepath):
@@ -52,7 +52,7 @@ class TestDataDB:
         if not os.path.exists(keys_path):
             write_json(keys_path, {}, indent=4)
         if not os.path.exists(main_path):
-            write_pickle(main_path, {})
+            write_pickle({}, main_path)
         self.main_file = main_file
         self.main_path = main_path
         self.keys_path = keys_path
@@ -66,7 +66,7 @@ class TestDataDB:
             filepath = os.path.join(self.root, self.keys_dict[key])
             filedata = read_pickle(filepath)
             filedata[key] = data
-            write_pickle(filepath, filedata)
+            write_pickle(filedata, filepath)
             print(f"update {key}, data at {filepath}")
             return
 
@@ -75,7 +75,7 @@ class TestDataDB:
         write_json(self.keys_path, self.keys_dict, indent=4)
         maindata = read_pickle(self.main_path)
         maindata[key] = data
-        write_pickle(self.main_path, data=maindata)
+        write_pickle(maindata, self.main_path)
 
         if os.path.getsize(self.main_path) > self.filesize:
             # 主文件过大时则将主文件重命名为新文件，并更新 keys_dict
@@ -90,7 +90,7 @@ class TestDataDB:
             # udpate key
             self.keys_dict.update({key:newfile for key, val in self.keys_dict.items() if val == self.main_file})
             write_json(self.keys_path, self.keys_dict, indent=4)
-            write_pickle(self.main_path, {})
+            write_pickle({}, self.main_path)
             
 
     def remove(self, key):
@@ -102,7 +102,7 @@ class TestDataDB:
         # remove data
         filedata = read_pickle(filepath)
         filedata.pop(key)
-        write_pickle(filepath, filedata)
+        write_pickle(filedata, filepath)
         print(f"remove {key}, data at {filepath}")
     def rename(self, key, new_key):
         assert key in self.keys_dict
@@ -115,7 +115,7 @@ class TestDataDB:
         filedata = read_pickle(filepath)
         filedata[new_key] = filedata[key]
         filedata.pop(key)
-        write_pickle(filepath, filedata)
+        write_pickle(filedata, filepath)
         print(f"rename {key} to {new_key}, data at {filepath}")
     def gc(self):
         import glob
@@ -126,7 +126,7 @@ class TestDataDB:
             keys = list(filedata.keys())
             [filedata.pop(key) for key in keys if key not in self.keys_dict]
             if filedata:
-                write_pickle(filepath, filedata)
+                write_pickle(filedata, filepath)
             else:
                 if os.system(f"rm -f {filepath}") != 0:
                     raise Exception(f"remove file {filepath} failed")
@@ -177,17 +177,27 @@ def convert_type(data, typeinfo=False):
         return tuple([convert_type(i, typeinfo) for i in list(data)]) # 转成 list 才支持遍历
     elif 'torch.Tensor' in str(type(data)):
         newdata = data.detach().cpu().numpy()
-        return (f'original type, {str(type(data))}', newdata) if typeinfo else newdata
+        return ({'typeinfo': str(type(data))}, newdata) if typeinfo else newdata
     elif 'DataContainer' in str(type(data)):
         # 见于 mmlab1.0 的 mmcv 中的数据结构
-        newdata = (f'original type, {str(type(data))}', data.data) if typeinfo else data.data
+        newdata = ({'typeinfo': str(type(data))}, data.data) if typeinfo else data.data
         return convert_type(newdata, typeinfo) # 还没结束，其数据可能是 dict 等，故仍需递归
     elif 'BaseDataElement' in str(data.__class__.__mro__): # 该类的继承关系，即数据是 BaseDataElement 及其子类的实例
         # 见于 mmlab2.0 的 mmengine 中的数据结构
-        newdata = (f'original type, {str(type(data))}', data.to_dict()) if typeinfo else data.to_dict()
+        newdata = ({'typeinfo': str(type(data))}, data.to_dict()) if typeinfo else data.to_dict()
         return convert_type(newdata, typeinfo)
     elif hasattr(data, '__dict__'):
         # 未知的类实例，则转成字典继续转换，常规用法定义的类都有该方法并可以通过 vars 转成字典
-        newdata = (f'original type, {type(data)}', vars(data)) if typeinfo else vars(data)
+        newdata = ({'typeinfo': str(type(data))}, vars(data)) if typeinfo else vars(data)
         return convert_type(newdata, typeinfo)
+    return data
+
+def remove_typeinfo(data):
+    if isinstance(data, dict):
+        return {k:remove_typeinfo(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [remove_typeinfo(i) for i in data]
+    elif isinstance(data, tuple):
+        if len(data) == 2 and isinstance(data[0], dict) and 'typeinfo' in data[0]:
+            return data[1]
     return data

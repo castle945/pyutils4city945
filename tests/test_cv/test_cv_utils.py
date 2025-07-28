@@ -13,7 +13,7 @@ except ImportError:
 
 def test_lidar_to_rangeview():
     datadb = pu4c.common.utils.TestDataDB(dbname='pu4c_unittest_data', root='tests/data/')
-    points, image, calib, boxes3d, labels = datadb.get('mmdet3d/kitti_000008')
+    points, image, calib, boxes3d, labels = datadb.get('mmdet3d/kitti/000008')
 
     # HW=64*720 常规的投影，由于点云个数(10 万级别)远大于 HW，大量点投影到同一个像素而丢失
     fov_up, fov_down, height, width = np.radians(2), np.radians(-24.8), 64, 720 # kitti velodyne params
@@ -55,7 +55,7 @@ def test_lidar_to_rangeview():
 @pytest.mark.skipif(NO_CV2, reason='cv2 is not installed, skipping this test')
 def test_project_points_to_pixels():
     datadb = pu4c.common.utils.TestDataDB(dbname='pu4c_unittest_data', root='tests/data')
-    points, image, calib, boxes3d, labels = datadb.get('mmdet3d/kitti_000008')
+    points, image, calib, boxes3d, labels = datadb.get('mmdet3d/kitti/000008')
     image = (image * 255).astype(np.uint8) # matplotlib 读图后会归一化
     image_copy = copy.deepcopy(image)
     # 边界框投影到图像

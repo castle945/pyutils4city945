@@ -5,13 +5,17 @@ from . import (
     color_det_class25, rviz_intensity_colormap, 
 )
 
-def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, uniform_color=None, colormap=None):
+def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, colormap=None, uniform_color=None):
+    """
+    点云着色，优先级 标签颜色映射 > 指定的纯色 > 反射率(points[:, 3])着色
+    注意，颜色值必须归一化，虽然不归一化并不报错，但是只能正确显示部分颜色导致与预期相悖
+    """
     cloud = o3d.geometry.PointCloud()
     cloud.points = o3d.utility.Vector3dVector(points[:, :3])
     if ds_voxel_size is not None:
         cloud = cloud.voxel_down_sample(ds_voxel_size)
     if labels is not None:
-        colormap = [[255, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255]] if colormap is None else colormap
+        colormap = [[1, 1, 1], [1, 0, 0], [0, 1, 0], [0, 0, 1]] if colormap is None else colormap
         colors = np.array(colormap)[labels.astype(np.int64)]
         cloud.colors = o3d.utility.Vector3dVector(colors)
     elif uniform_color is not None: cloud.paint_uniform_color(uniform_color)
@@ -60,28 +64,39 @@ def create_voxels_geometry(voxel_centers, voxel_size, uniform_color=[0, 0, 0]):
 
     return create_boxes3d_geometry(boxes3d, uniform_color=uniform_color, show_heading=False)
 
-def playcloud(switch_func, length, start=0, step=10):
+def playcloud(switch_func, length, start=0, step=10, point_size=1, background_color=[0, 0, 0]):
+    """视角参数这块容易引起版本冲突，如无必要可删除，在 open3d-v0.18.0 测试通过"""
+    def switch_wrapper(vis, i):
+        """保存用户手动调整的视角参数"""
+        global camera_params
+        camera_params = vis.get_view_control().convert_to_pinhole_camera_parameters()
+        vis.clear_geometries()
+
+        switch_func(vis, i)
+
+        vis.get_view_control().convert_from_pinhole_camera_parameters(camera_params, allow_arbitrary=True)
+        vis.update_renderer()
     def prev(vis):
         global g_idx
         g_idx = max(g_idx - 1, 0)
-        switch_func(vis, g_idx)
+        switch_wrapper(vis, g_idx)
     def next(vis):
         global g_idx
         g_idx = min(g_idx + 1, length-1)
-        switch_func(vis, g_idx)
+        switch_wrapper(vis, g_idx)
     def prev_n(vis):
         global g_idx
         g_idx = max(g_idx - step, 0)
-        switch_func(vis, g_idx)
+        switch_wrapper(vis, g_idx)
     def next_n(vis):
         global g_idx
         g_idx = min(g_idx + step, length-1)
-        switch_func(vis, g_idx)
+        switch_wrapper(vis, g_idx)
 
     vis = o3d.visualization.VisualizerWithKeyCallback()
     vis.create_window()
-    vis.get_render_option().point_size = 1
-    vis.get_render_option().background_color = np.zeros(3)
+    vis.get_render_option().point_size = point_size
+    vis.get_render_option().background_color = background_color
 
     vis.register_key_callback(ord('W'), prev_n)
     vis.register_key_callback(ord('S'), next_n)
@@ -91,6 +106,6 @@ def playcloud(switch_func, length, start=0, step=10):
 
     global g_idx
     g_idx = start
-    switch_func(vis, start)
+    switch_wrapper(vis, start)
     vis.run()
     vis.destroy_window()
