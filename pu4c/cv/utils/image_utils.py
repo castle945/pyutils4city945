@@ -1,6 +1,6 @@
 import numpy as np
 
-def center_crop(data: np.ndarray, crop_width, crop_height):
+def center_crop(data: np.ndarray, crop_width: int, crop_height: int):
     height, width, _ = data.shape
     start_x = (width - crop_width) // 2
     start_y = (height - crop_height) // 2

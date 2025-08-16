@@ -1,11 +1,7 @@
 import numpy as np
 import os
 
-def read_points(filepath, num_features=4, transmat=None):
-    """
-    Args:
-        transmat: 4x4 变换矩阵，某些点云可能希望直接进行坐标变换
-    """
+def read_points(filepath, num_features: int = 4) -> np.ndarray:
     filetype = os.path.splitext(filepath)[-1]
     if filetype == ".bin":
         points = np.fromfile(filepath, dtype=np.float32).reshape(-1, num_features)
@@ -22,16 +18,10 @@ def read_points(filepath, num_features=4, transmat=None):
     else:
         raise TypeError("unsupport file type")
 
-    if transmat is not None:
-        points[:, :3] = (transmat[:3, :3] @ points[:, :3].T +  transmat[:3, [3]]).T
-
     return points
 
 def transform_matrix(rotation_mat: np.ndarray, translation: np.ndarray, inverse: bool = False) -> np.ndarray:
-    """
-    传入旋转矩阵和平移向量，返回变换矩阵或变换矩阵的逆  
-    要求输入矩阵是行列式为 1 的 3×3 正交矩阵(即旋转矩阵的充要条件，一般可由欧拉角或四元数等转换而来)，而不能对任意矩阵求逆
-    """
+    """传入变换矩阵中拆解的旋转矩阵和平移向量，返回变换矩阵或变换矩阵的逆，要求变换矩阵只由刚体变换计算(即不包括含相机内参矩阵的计算)得到而不能对任意 4x4 矩阵的拆解求逆"""
     tm = np.eye(4)
 
     if inverse:

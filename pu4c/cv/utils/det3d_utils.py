@@ -2,25 +2,16 @@
 import numpy as np
 import copy
 
-def limit_period(val,
-                 offset: float = 0.5,
-                 period: float = np.pi):
-    """Limit the value into a period for periodic function.
-    周期函数的区间映射，映射到 [-offset*period, (1-offset) * period]，floor 取小于输入 x 的最大整数
-    常用于目标检测中规范化偏航角，坐标变换后的偏航角可能为n*[0,2pi]，以 2pi 为周期，可以将其调整为[-pi,pi]    
-    Args:
-        val (np.ndarray or Tensor): The value to be converted.
-        offset (float): Offset to set the value range. Defaults to 0.5.
-        period (float): Period of the value. Defaults to np.pi.
+def limit_period(val, offset: float = 0.5, period: float = np.pi):
+    """周期函数的区间映射
 
-    Returns:
-        np.ndarray or Tensor: Value in the range of
-        [-offset * period, (1-offset) * period].
+    映射到 [-offset*period, (1-offset) * period]，floor 取小于输入 x 的最大整数  
+    常用于目标检测中规范化偏航角，坐标变换后的偏航角可能为n*[0,2pi]，以 2pi 为周期，可以将其调整为[-pi,pi]
     """
     limited_val = val - np.floor(val / period + offset) * period
     return limited_val
 
-def rotate_points_along_z(points, angle):
+def rotate_points_along_z(points: np.ndarray, angle: float) -> np.ndarray:
     cosa = np.cos(angle)
     sina = np.sin(angle)
     rot_matrix = np.array([
@@ -30,7 +21,7 @@ def rotate_points_along_z(points, angle):
     ])
     points_rot = points[:, :3] @ rot_matrix
     return points_rot
-def boxes3d_to_corners(boxes3d):
+def boxes3d_to_corners(boxes3d: np.ndarray) -> np.ndarray:
     """
              4-------- 6
            /|         /|
@@ -54,7 +45,7 @@ def boxes3d_to_corners(boxes3d):
     corners3d += boxes3d[:, None, 0:3]
 
     return corners3d[0] if dims == 1 else corners3d
-def corners_to_boxes3d(corners):
+def corners_to_boxes3d(corners: np.ndarray) -> np.ndarray:
     corners = copy.deepcopy(corners)
     centers = np.mean(corners, axis=1)
     corners -= centers[:, np.newaxis, :]
@@ -72,11 +63,11 @@ def mask_points_and_boxes_outside_range(points, limit_range, boxes3d=None):
     box_mask = ((boxes3d[:, :3] >= limit_range[:3]) & (boxes3d[:, :3]  <= limit_range[3:6])).all(axis=-1) if boxes3d is not None else None
 
     return point_mask, box_mask
-def get_oriented_bounding_box_corners(xyz, lwh, axis_angles):
-    """
-    轴角转旋转矩阵（暂只考虑偏航）来将其旋转为有向包围盒，计算盒子的 8 个角点，添加连线
+def get_oriented_bounding_box_corners(xyz: np.ndarray, lwh: np.ndarray, axis_angles: np.ndarray) -> np.ndarray:
+    """轴角转旋转矩阵（暂只考虑偏航）来将其旋转为有向包围盒，计算盒子的 8 个角点，添加连线
+
     Locals:
-        lines: (10, 2), 预定义的 14 条连线
+        lines (ndarray(10, 2)): 预定义的 14 条连线
               4 -------- 6
              /|         /|
             5 -------- 3 .
@@ -85,7 +76,7 @@ def get_oriented_bounding_box_corners(xyz, lwh, axis_angles):
             |/         |/       z |/ x  
             2 -------- 0      y - 0
     Returns:
-        corners: (N, 8, 3)
+        corners (ndarray(N, 8, 3)): 角点
     """
     x, y, z = xyz
     l, w, h = lwh
@@ -115,12 +106,16 @@ def get_oriented_bounding_box_corners(xyz, lwh, axis_angles):
     corners = (R @ offsets + np.array([[x], [y], [z]])).T
     
     return corners
-def get_oriented_bounding_box_lines(head_cross_lines=True):
+def get_oriented_bounding_box_lines(head_cross_lines: bool = True):
+    """获取有向包围盒的连线
+    Args:
+        head_cross_lines: 是否添加头部交叉线
+    """
     lines = [
-                [0, 2], [0, 3], [2, 5], [3, 5],
-                [0, 1], [3, 6], [5, 4], [2, 7],
-                [1, 6], [1, 7], [7, 4], [4, 6],
-            ]
+        [0, 2], [0, 3], [2, 5], [3, 5],
+        [0, 1], [3, 6], [5, 4], [2, 7],
+        [1, 6], [1, 7], [7, 4], [4, 6],
+    ]
     if head_cross_lines:
         lines.extend([[1, 4], [6, 7]])
     return lines

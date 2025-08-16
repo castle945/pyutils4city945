@@ -1,3 +1,4 @@
+from typing import Any, Union, Optional, Dict, List, Tuple, Callable
 import open3d as o3d
 import numpy as np
 from . import (
@@ -5,7 +6,10 @@ from . import (
     color_det_class25, rviz_intensity_colormap, 
 )
 
-def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, colormap=None, uniform_color=None):
+def create_pointcloud_geometry(
+    points: np.ndarray, labels: np.ndarray = None, ds_voxel_size: Union[float, List[float]] = None, 
+    colormap: Union[List[List], np.ndarray] = None, uniform_color: List[List] = None,
+):
     """
     点云着色，优先级 标签颜色映射 > 指定的纯色 > 反射率(points[:, 3])着色
     注意，颜色值必须归一化，虽然不归一化并不报错，但是只能正确显示部分颜色导致与预期相悖
@@ -24,10 +28,10 @@ def create_pointcloud_geometry(points, labels=None, ds_voxel_size=None, colormap
         cloud.colors = o3d.utility.Vector3dVector(colors)
     
     return cloud
-def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], show_heading=True):
+def create_boxes3d_geometry(boxes3d: np.ndarray, uniform_color: list = [0, 0.99, 0], show_heading: bool = True):
     """
     Args:
-        boxes3d: (N, 7)[xyz,lwh,yaw] or (N, 8)[xyz,lwh,yaw,cls]
+        boxes3d (ndarray(N, 7)[xyz,lwh,yaw] | ndarray(N, 8)[xyz,lwh,yaw,cls]): 边界框
     """
     # 计算角点与线框
     N, C = boxes3d.shape
@@ -52,10 +56,8 @@ def create_boxes3d_geometry(boxes3d, uniform_color=[0, 0.99, 0], show_heading=Tr
         line_sets.colors = o3d.utility.Vector3dVector(boxes3d_colors.reshape((-1, 3)))
 
     return line_sets
-def create_voxels_geometry(voxel_centers, voxel_size, uniform_color=[0, 0, 0]):
-    """
-    批量添加边框，可视化体素就是每个中心点都画一个框
-    """
+def create_voxels_geometry(voxel_centers: np.ndarray, voxel_size: np.ndarray, uniform_color: List[float] = [0, 0, 0]):
+    """批量添加边框，可视化体素就是每个中心点都画一个框"""
     # 计算每个非空体素的边框 (N,7)[xyz,wlh,yaw]
     N = voxel_centers.shape[0]
     wlh = np.tile(voxel_size, (N, 1)) # voxel_size 的第 0 维重复 N 次，第 1 维重复 1 次
@@ -64,7 +66,10 @@ def create_voxels_geometry(voxel_centers, voxel_size, uniform_color=[0, 0, 0]):
 
     return create_boxes3d_geometry(boxes3d, uniform_color=uniform_color, show_heading=False)
 
-def playcloud(switch_func, length, start=0, step=10, point_size=1, background_color=[0, 0, 0]):
+def playcloud(
+    switch_func: Callable, length: int, start: int = 0, step: int = 10,
+    point_size: int = 1, background_color: List[float] = [0, 0, 0],
+):
     """视角参数这块容易引起版本冲突，如无必要可删除，在 open3d-v0.18.0 测试通过"""
     def switch_wrapper(vis, i):
         """保存用户手动调整的视角参数"""

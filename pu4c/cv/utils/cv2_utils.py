@@ -1,13 +1,22 @@
 import numpy as np
 import cv2
 
-def photo_metric_distortion(data, rgb=True, linear_stretch=False, brightness=None, contrast=None, saturation=None, hue=None):
-    """
-    图像处理之光度失真
+def photo_metric_distortion(
+    data,
+    rgb: bool = True,
+    linear_stretch: bool = False,
+    brightness: float = None,
+    contrast: float = None,
+    saturation: float = None,
+    hue: float = None,
+    ):
+    """图像处理之光度失真
     Args:
         linear_stretch: 是否对增强后的数据，值域线性拉伸到 [0, 255]
         brightness: 亮度绝对差值，正数调亮负数调暗
         contrast: 对比度尺度，像素值的倍率
+        saturation: 饱和度
+        hue: 色度
     """
     data = np.array(data, dtype=np.float32)
     data_bgr = data[:, :, ::-1] if rgb else data

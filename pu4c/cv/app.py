@@ -1,37 +1,39 @@
+from typing import Any, Union, Optional, Dict, List, Tuple
 from pu4c.common.utils import rpc_func
 import pu4c.config as cfg
+import numpy as np
 
 # 点云可视化
 @rpc_func
 def cloud_viewer(
-    filepath=None, num_features=4, transmat=None,          # read_points
-    points=None, point_labels=None, ds_voxel_size=None,
-    cloud_colormap=None, cloud_uniform_color=None,         # 点云着色，优先级 标签颜色映射 > 指定的纯色 > 反射率(points[:, 3])着色
-    boxes3d=None, 
-    vis=None, show_axis=True, run=True, 
-    rpc=False):
-    """
-    快速查看单帧点云，支持 pcd/bin/npy/pkl/txt，输入文件路径或 ndarray 数组
-    输入点云及带标签的边界框，可用于三维目标检测可视化
-    输入点云及点云标签，可用于三维语义分割可视化、体素中心点及体素标签可视化、对比处理前后点云
-    Examples:
-        pu4c.det3d.app.cloud_viewer(filepath="/datasets/KITTI/object/training/velodyne/000000.bin", num_features=4)
-        pu4c.det3d.app.cloud_viewer(points, boxes3d=boxes3d, rpc=True)
-        pu4c.det3d.app.cloud_viewer(points=points, boxes3d=boxes3d_with_label, cloud_uniform_color=[0.99,0.99,0.99])
-        pu4c.det3d.app.cloud_viewer(points=points, point_labels=point_labels, cloud_colormap=colormap)
-    Keys:
-        -/=: 调整点云点的大小
+    filepath: str = None, num_features: int = 4,                                                    # read_points 读点云所需参数
+    points: np.ndarray = None, point_labels: np.ndarray = None, ds_voxel_size: Union[float, List[float]] = None,
+    cloud_colormap: Union[List[List], np.ndarray] = None, cloud_uniform_color: List[List] = None,   # 点云着色，优先级 标签颜色映射 > 指定的纯色 > 反射率(points[:, 3])着色
+    boxes3d: np.ndarray = None,
+    vis: Any = None, show_axis: bool = True, run: bool = True,
+    rpc: bool = False,
+) -> None:
+    """快速查看单帧点云，支持 pcd/bin/npy/pkl/txt
+    
+    常见用法如
+        输入点云及带标签的边界框，可用于三维目标检测可视化
+        输入点云及点云标签，可用于三维语义分割可视化
     Args:
-        cloud_uniform_color: 自定义纯色点云颜色，例如白色 [1,1,1]
-        cloud_colormap: 点云标签颜色表
-        points: (N, 3)[x,y,z] or (N, 4)[x,y,z,i] 当 point_labels 为 None 时，如果 (N, 4) 则按反射率着色否则 open3d 默认按照高度着色
-        boxes3d: (N, 7)[xyz,lwh,yaw] or (N, 8)[xyz,lwh,yaw,cls]
-        ds_voxel_size: 降采样尺寸，注意如设置此值因为 open3d 降采样完之后只会保留坐标信息，将只能按高度对点云着色
+        points (ndarray(N, 3) | ndarray(N, 4)[x,y,z,i]): 当 point_labels 为 None 时，如果点云形状为 (N, 4) 则按反射率着色否则 open3d 默认按照高度着色
+        ds_voxel_size: 降采样尺寸，如设置此值则对点云进行降采样，注意由于 open3d 降采样完之后只会保留坐标信息，将只能按高度对点云着色
+        cloud_colormap (list[list[r,g,b]] | ndarray(M, 3)): 点云标签颜色表，用于将整型的点标签映射为 [r,g,b] 值，open3d 要求颜色值已归一化
+        cloud_uniform_color (list[r,g,b]): 用于将点云着纯色，例如白色 [1,1,1]
+        boxes3d (ndarray(N, 7)[xyz,lwh,yaw] | ndarray(N, 8)[xyz,lwh,yaw,cls]): 如果边界框形状为 (N, 8) 则按标签对框着色否则框着绿色
         show_axis: 是否绘制坐标轴，如果不绘制那么会自动调整观察视角
-        rpc: False 本地执行，True 远程执行
+        rpc: 是则远程执行，否则本地执行
+    Examples:
+        pu4c.cv.cloud_viewer(filepath="/datasets/KITTI/object/training/velodyne/000000.bin", num_features=4)  
+        pu4c.cv.cloud_viewer(points, boxes3d=boxes3d, rpc=True)  
+        pu4c.cv.cloud_viewer(points=points, point_labels=point_labels, cloud_colormap=colormap)  
+    Keys:
+        -/=: 调整点云点的大小  
     """
     import open3d as o3d
-    import numpy as np
     from .utils import read_points, open3d_utils
     
     if vis is None:
@@ -44,7 +46,7 @@ def cloud_viewer(
         vis.add_geometry(axis_geometry)
 
     if filepath is not None:
-        points = read_points(filepath, num_features=num_features, transmat=transmat)
+        points = read_points(filepath, num_features=num_features)
     if points is not None:
         cloud_geometry = open3d_utils.create_pointcloud_geometry(
             points, labels=point_labels, ds_voxel_size=ds_voxel_size, 
@@ -60,16 +62,21 @@ def cloud_viewer(
         vis.destroy_window()
 @rpc_func
 def voxel_viewer(
-    voxel_centers, voxel_size, 
-    voxel_labels=None, voxel_colormap=None, 
-    vis=None, run=True, 
-    rpc=False):
-    """
-    输入体素中心点，可用于体素可视化
+    voxel_centers: np.ndarray, voxel_size: np.ndarray,
+    voxel_labels: np.ndarray = None, voxel_colormap: Union[List[List], np.ndarray] = None,
+    vis: Any = None, show_axis: bool = True, run: bool = True,
+    rpc: bool = False,
+) -> None:
+    """体素可视化
+
     输入体素中心点及标签，可以于 OCC 可视化
+    Args:
+        voxel_centers (ndarray(N, 3)): 体素中心点
+        voxel_size (ndarray(3,)): 体素大小
+        voxel_labels (ndarray(N,)): 体素标签
+        voxel_colormap (list[list[r,g,b]] | ndarray(M, 3)): 体素标签颜色表
     Examples:
-        pu4c.det3d.app.voxel_viewer(voxel_centers=voxel_coords*voxel_size, voxel_size=voxel_size)
-        pu4c.det3d.app.voxel_viewer(voxel_centers, voxel_size, voxel_labels=labels, voxel_colormap=colormap)
+        pu4c.cv.voxel_viewer(voxel_centers, voxel_size, voxel_labels=labels, voxel_colormap=colormap)  
     """
     import open3d as o3d
     from .utils import open3d_utils
@@ -86,21 +93,22 @@ def voxel_viewer(
     # 如有标签优先按标签着色，否则着纯色
     cloud_viewer(points=voxel_centers, point_labels=voxel_labels, 
         cloud_uniform_color=[0, 1, 0], cloud_colormap=voxel_colormap, 
-        vis=vis, show_axis=True, run=run,
+        vis=vis, show_axis=show_axis, run=run,
         )
 @rpc_func
-def cloud_viewer_panels(points_list=None, point_labels_list=None, boxes3d_list=None, 
-    cloud_uniform_color=None, cloud_colormap=None,                                  # pointcloud color
-    show_axis=True, offset=None, 
-    rpc=False):
-    """
-    Examples:
-        pu4c.det3d.app.cloud_viewer_panels(points_list=[points1, points2], boxes3d_list=[boxes3d1, boxes3d2], offset=[180, 0, 0])
+def cloud_viewer_panels(
+    points_list: List[np.ndarray], point_labels_list: List[np.ndarray] = None, boxes3d_list: List[np.ndarray] = None,
+    cloud_colormap: Union[List[List], np.ndarray] = None, cloud_uniform_color: List[List] = None,
+    show_axis: bool = True, offset: List[float] = None,
+    rpc: bool = False,
+) -> None:
+    """同一个窗口中可视化多个点云，共享视角参数
     Args:
         offset: 面板之间的间隔，open3d 窗口坐标系，右前上
+    Examples:
+        pu4c.cv.cloud_viewer_panels(points_list=[points1, points2], boxes3d_list=[boxes3d1, boxes3d2], offset=[180, 0, 0])  
     """
     import open3d as o3d
-    import numpy as np
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.get_render_option().point_size = 1
@@ -125,17 +133,19 @@ def cloud_viewer_panels(points_list=None, point_labels_list=None, boxes3d_list=N
     vis.run()
     vis.destroy_window()
 @rpc_func
-def cloud_player(root=None, pattern="*", num_features=4, filepaths=None,
-    points_list=None, boxes3d_list=None, 
-    cloud_uniform_color=None, show_axis=True,
-    start=0, step=10, 
-    rpc=False):
-    """
-    点云播放器，支持播放点云目录与点云列表
-    # @! 注意设置保存视角参数后，初始视角不再良好，需要滚动缩放一下才能看到
+def cloud_player(
+    root: str = None, pattern: str = '*', filepaths: List[str] = None, num_features: int = 4,
+    points_list: List[np.ndarray] = None, boxes3d_list: List[np.ndarray] = None,
+    cloud_uniform_color: List[List] = None, show_axis: bool = True,
+    start: int = 0, step: int = 10,
+    rpc: bool = False,
+) -> None:
+    """点云播放器，支持播放点云目录与点云列表
+    
+    注意设置保存视角参数后，初始视角不再良好，需要滚动鼠标滚轮缩放一下才能看到
+
     Examples:
-        pu4c.det3d.app.cloud_player(root="/datasets/KITTI/object/training/velodyne/", num_features=4, pattern="*.bin")
-        pu4c.det3d.app.cloud_player(filepaths=filepaths, num_features=5, boxes3d_list=boxes3d_list, cloud_uniform_color=[0.99, 0.99, 0.99], rpc=True)
+        pu4c.cv.cloud_player(root="/datasets/KITTI/object/training/velodyne/", num_features=4, pattern="*.bin")  
     Keys:
         A/D: pre/next one frame
         W/S: pre/next step frame
@@ -166,10 +176,10 @@ def cloud_player(root=None, pattern="*", num_features=4, filepaths=None,
 
 # 图片可视化
 @rpc_func
-def image_viewer(filepath=None, data=None, rpc=False):
-    """
+def image_viewer(filepath: str = None, data: np.ndarray = None, rpc: bool = False):
+    """可视化图像
     Args:
-        data: (H, W, C) 图片数据
+        data (ndarray(H, W, C)): 图片数据
     """
     import matplotlib.pyplot as plt
     from matplotlib.image import imread
@@ -190,9 +200,10 @@ def image_viewer(filepath=None, data=None, rpc=False):
 # 数据集可视化
 @rpc_func
 def play_semantickitti(
-    root='/datasets/SemanticKITTI',
-    start=0, step=10, 
-    rpc=False):
+    root: str = '/datasets/SemanticKITTI',
+    start: int = 0, step: int = 10,
+    rpc: bool = False,
+) -> None:
     """播放 SemanticKITTI 数据集"""
     import glob, os
     import numpy as np
@@ -231,16 +242,16 @@ def play_semantickitti(
 
 @rpc_func
 def play_occ3d_nuscenes(
-    root='/datasets/nuScenes/Occ3D-nuScenes',
-    start=0, step=10, 
-    rpc=False):
-    """
-    播放 Occ3D-nuScenes 数据集
-    Files:
-        labels.npz: 整个文件类似于一个字典
-            semantics: (H=80/0.4=200, W=80/0.4=200, D=6.4/0.4=16), 每个体素的语义标签
-            mask_lidar: HWD, 激光雷达视角下的掩膜
-            mask_camera: HWD, 相机视角下的掩膜
+    root: str = '/datasets/nuScenes/Occ3D-nuScenes',
+    start: int = 0, step: int = 10,
+    rpc: bool = False,
+) -> None:
+    """播放 Occ3D-nuScenes 数据集
+
+    labels.npz 整个文件类似于一个字典，包括
+        semantics: (H=80/0.4=200, W=80/0.4=200, D=6.4/0.4=16), 每个体素的语义标签
+        mask_lidar: HWD, 激光雷达视角下的掩膜
+        mask_camera: HWD, 相机视角下的掩膜
     """
     import glob, os
     import numpy as np
@@ -283,9 +294,10 @@ def play_occ3d_nuscenes(
     open3d_utils.playcloud(switch, length=34149, start=start, step=step, point_size=10, background_color=[1, 1, 1])
 @rpc_func
 def play_surroundocc(
-    root='/datasets/nuScenes/surroundocc',
-    start=0, step=10, 
-    rpc=False):
+    root: str = '/datasets/nuScenes/surroundocc',
+    start: int = 0, step: int = 10,
+    rpc: bool = False,
+) -> None:
     """播放 surroundocc 数据集"""
     import glob, os
     import numpy as np
@@ -315,13 +327,15 @@ def play_surroundocc(
 
 
 @rpc_func
-def plot_tsne2d(features, labels, 
-    x="x", y="y", title="T-SNE",
-    rpc=False):
+def plot_tsne2d(
+    features: np.ndarray, labels: np.ndarray,
+    x: str = 'x', y: str = 'y', title: str = 'T-SNE',
+    rpc: bool = False,
+) -> None:
     """
     Args:
-        features: (N, M), N 个归一化的样本，每个 M 维
-        labels: (N, ) 聚类标签
+        features (ndarray(N, M)): N 个归一化的样本，每个 M 维
+        labels (ndarray(N,)): 聚类标签
     """
     from sklearn.manifold import TSNE
     import numpy as np
@@ -340,9 +354,11 @@ def plot_tsne2d(features, labels,
     ).set(title=title)
     plt.show()
 @rpc_func
-def plot_umap(features, labels, 
-    x="x", y="y", title="T-SNE",
-    rpc=False):
+def plot_umap(
+    features: np.ndarray, labels: np.ndarray,
+    x: str = 'x', y: str = 'y', title: str = 'UMap',
+    rpc: bool = False,
+) -> None:
     # 与 t-SNE 相比，它在保持数据全局结构方面更加出色，但更慢
     # see https://umap-learn.readthedocs.io/en/latest/auto_examples/plot_mnist_example.html
     import umap # pip install umap-learn

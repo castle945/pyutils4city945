@@ -1,14 +1,14 @@
+from typing import Any, Union, Optional, Dict, List, Tuple
 import numpy as np
 
 # 投影
-def project_points_to_pixels(points, image_shape, transform_mat):
+def project_points_to_pixels(points: np.ndarray, image_shape: tuple, transform_mat: np.ndarray):
     """
     坐标变换公式: 
         (1) 变换矩阵形式: y(4,N) = R(4,4)*x(4,N) 变换矩阵同理定义为右乘列向量的点坐标的增广，不一定是正交阵，往往对公式转置一下以适应点云输入，即 y.T(N,4) = x.T(N,4)*R.T(4,4)
         (2) 旋转矩阵加平移向量形式: y(3,N) = R(3,3)*x(3,N) + t(3,1) 平移向量为列向量，旋转矩阵也定义为右乘列向量的点坐标，旋转矩阵为正交阵具有转置等于逆和行列式为 1 的特性
     Args:
-        points: (N, 3)
-        transform_mat: (4, 4) 激光雷达坐标系到像素坐标系的变换矩阵，它等于 相机内参矩阵 @ 激光雷达到相机坐标系的变换矩阵
+        transform_mat (ndarray(4, 4)): 激光雷达坐标系到像素坐标系的变换矩阵，它等于 相机内参矩阵 @ 激光雷达到相机坐标系的变换矩阵
     """
     points_hom = np.hstack((points[:, :3], np.ones((points.shape[0], 1), dtype=np.float32))) # [N, 4]
     points_pixel = points_hom @ np.ascontiguousarray(transform_mat.T)[:, :3] # 老版本 numpy 数组转置后内存不连续，从而导致计算错误，故需要再转成内存连续后再计算
@@ -24,11 +24,11 @@ def project_points_to_pixels(points, image_shape, transform_mat):
     mask = np.logical_and(mask, pixels[:, 1] < image_shape[0])
 
     return pixels, pixels_depth, mask
-def project_pixels_to_points(pixels, depth, transform_mat):
+def project_pixels_to_points(pixels: np.ndarray, depth: np.ndarray, transform_mat: np.ndarray):
     """
     Args:
-        pixels: (N, 2)[x,y]
-        depth: (N,)
+        pixels (ndarray(N, 2)[x,y]): 像素坐标
+        depth (ndarray(N,)): 像素深度
     """
     N = depth.shape[0]
     points_cam = np.zeros((N, 3))
@@ -38,9 +38,8 @@ def project_pixels_to_points(pixels, depth, transform_mat):
     points_cam_hom = np.hstack((points_cam, np.ones((N, 1), dtype=np.float32))) # [N, 4]
     points_hom = points_cam_hom @ np.ascontiguousarray(transform_mat.T)
     return points_hom[:, :3]
-def project_points_to_pixels_cv2(points, image_shape, lidar2cam_mat, intrinsics_4x4, dist_coeffs):
-    """
-    如果带畸变参数，可以调 cv2.projectPoints 进行处理，输入相机坐标系下的点，输出二维像素坐标
+def project_points_to_pixels_cv2(points: np.ndarray, image_shape: tuple, lidar2cam_mat: np.ndarray, intrinsics_4x4, dist_coeffs):
+    """如果带畸变参数，可以调 cv2.projectPoints 进行处理，输入相机坐标系下的点，输出二维像素坐标
     Args:
         lidar2cam_mat: 4x4 激光雷达到相机坐标系的变换矩阵
         intrinsics_4x4: 相机内参矩阵
@@ -64,9 +63,8 @@ def project_points_to_pixels_cv2(points, image_shape, lidar2cam_mat, intrinsics_
 
     return pixels, pixels_depth, mask
 
-def range_projection(points, height, width, fov):
-    """
-    lidar_to_rangeview 的仅线性拉伸简化版
+def range_projection(points: np.ndarray, height: int, width: int, fov: tuple):
+    """lidar_to_rangeview 的仅线性拉伸简化版
     Args:
         fov: [fov_up, fov_down]
     """
@@ -91,23 +89,25 @@ def range_projection(points, height, width, fov):
     point_idx[proj_y, proj_x] = np.arange(depth.shape[0])
 
     return range_image, point_idx
-def lidar_to_rangeview(points, height, width, max_depth=None, return_intensity=False,
-                       fov=None,
-                       resolution=None, fov_offset_down=None):
-    """
-    一般算法都是以线性拉伸的方式转 RV 图像，其实这就是一种柱坐标系体素栅格
-    Examples:
-        线性拉伸方式: lidar_to_rangeview(points, height, width, fov=fov)
-        非线性拉伸方式: lidar_to_rangeview(points, height, width, resolution=resolution, fov_down=fov_down)
+def lidar_to_rangeview(
+    points: np.ndarray, height: int, width: int, 
+    fov: List[float] = None,
+    resolution: List[float] = None, fov_offset_down: float = None,
+    max_depth: float = None, return_intensity: bool = False,
+):
+    """一般算法都是以线性拉伸的方式转 RV 图像，其实这就是一种柱坐标系体素栅格
     Args:
-        fov: [fov_up, fov_down, fov_left, fov_right] 增加水平视场角范围使可用于非机械雷达
-        resolution: None 则以线性拉伸的方式，否则传入角度的分辨率 [res_y, res_x]，按实际填入（类似给定 voxel_size 的体素化）
+        fov (list(fov_up, fov_down, fov_left, fov_right)): 增加水平视场角范围使可用于非机械雷达
+        resolution (list(res_y, res_x)): None 则以线性拉伸的方式，否则传入角度的分辨率，按实际填入（类似给定 voxel_size 的体素化）
         fov_offset_down: 对底部 fov 的偏移量，当可以刻意把显示范围扩大时，fov_offset_down 可以小于 fov_down 以使得画面居中
         return_intensity: 是否返回反射强度图像
-    Returns: 
+    Returns:
         range_image: 浮点数深度值，-1 表示无效点
         point_idx: 像素坐标到原始点云点坐标的索引，point = points[point_idx[y, x]] 或 point_idx.reshape(-1) rv_points = points[point_idx[point_idx != -1]]
         intensity_image: 反射强度，-1 表示无效点
+    Examples:
+        (1) 线性拉伸方式 lidar_to_rangeview(points, height, width, fov=fov)  
+        (2) 非线性拉伸方式 lidar_to_rangeview(points, height, width, resolution=resolution, fov_down=fov_down)  
     """
     depth = np.linalg.norm(points[:, :3], ord=2, axis=1) # 按行求二范数，即距离
     # 前左上坐标系，yaw 加负号反向一下以遵循从左到右递增的习惯
@@ -156,14 +156,12 @@ def lidar_to_rangeview(points, height, width, max_depth=None, return_intensity=F
         return range_image, point_idx, intensity_image
 
     return range_image, point_idx
-def rangeview_to_lidar(range_image, intensity_image=None, 
-                       fov=None,
-                       resolution=None, fov_offset_down=None):
-    """
-    modified from https://github.com/city945/LiDAR4D/blob/main/utils/convert.py
-    Returns:
-        points: (N,4) or (N,3)
-    """
+def rangeview_to_lidar(
+    range_image: np.ndarray, 
+    intensity_image: np.ndarray = None, 
+    fov: List[float] = None,
+    resolution: List[float] = None, fov_offset_down: float = None,
+):
     height, width = range_image.shape
     proj_x, proj_y = np.meshgrid(np.arange(width, dtype=np.float32), np.arange(height, dtype=np.float32), indexing="xy")
 

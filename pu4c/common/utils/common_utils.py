@@ -3,6 +3,7 @@ import pickle, json, os
 import pu4c.config as cfg
 
 def rpc_func(func):
+    """远程调用装饰器，要求被装饰函数具有名为 rpc 的布尔类型参数"""
     def wrapper(*args, **kwargs):
         if ('rpc' in kwargs) and kwargs['rpc']:
             kwargs['rpc'] = False
@@ -18,28 +19,29 @@ def rpc_func(func):
             return func(*args, **kwargs) # python 中会为无返回值的函数返回 None
     return wrapper
 
-def read_pickle(filepath=cfg.cache_pkl):
+def read_pickle(filepath: str = cfg.cache_pkl):
     with open(filepath, 'rb') as f:
         data = pickle.load(f)
     return data
-def write_pickle(data, filepath=cfg.cache_pkl):
-    with open(filepath, "wb") as f:
+def write_pickle(data, filepath: str = cfg.cache_pkl):
+    with open(filepath, 'wb') as f:
         pickle.dump(data, f)
-def read_json(filepath):
+def read_json(filepath: str):
     with open(filepath, 'r') as f:
         data = json.load(f)
     return data
-def write_json(filepath, data, indent=None):
+def write_json(data, filepath: str, indent: int = 4):
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=indent)
 
 class TestDataDB:
+    """简单的键值数据库，可用于存储测试数据
+    
+    (1) 使用 json 文件存储数据的键值-路径对，使用 pickle 文件存储键值-数据对  
+    (2) json 文件可编辑，删除条目并运行 gc 方法进行垃圾回收  
+    (3) 建议压缩保存为 .pkl.tgz 文件以进行文件传输  
     """
-    1. 简单的键值数据库，可用于存储测试数据，其中使用 json 文件存储数据的键值-路径对，使用 pickle 文件存储键值-数据对
-    2. json 文件可编辑，删除条目并运行 gc 方法进行垃圾回收
-    3. 建议压缩保存为 .pkl.tgz 文件以进行文件传输
-    """
-    def __init__(self, dbname="pu4c_test_data", root=cfg.cache_dir):
+    def __init__(self, dbname: str = 'pu4c_test_data', root: str = cfg.cache_dir):
         self.dbname = dbname
         self.root = root
 
@@ -50,7 +52,7 @@ class TestDataDB:
         if os.path.exists(os.path.join(root, dbname + '.pkl.tgz')) and not os.path.exists(keys_path):
             self.restore()
         if not os.path.exists(keys_path):
-            write_json(keys_path, {}, indent=4)
+            write_json({}, keys_path)
         if not os.path.exists(main_path):
             write_pickle({}, main_path)
         self.main_file = main_file
@@ -72,7 +74,7 @@ class TestDataDB:
 
         # 键值不存在则添加数据
         self.keys_dict[key] = self.main_file
-        write_json(self.keys_path, self.keys_dict, indent=4)
+        write_json(self.keys_dict, self.keys_path)
         maindata = read_pickle(self.main_path)
         maindata[key] = data
         write_pickle(maindata, self.main_path)
@@ -89,7 +91,7 @@ class TestDataDB:
             print(f"create new file {newfile}")
             # udpate key
             self.keys_dict.update({key:newfile for key, val in self.keys_dict.items() if val == self.main_file})
-            write_json(self.keys_path, self.keys_dict, indent=4)
+            write_json(self.keys_dict, self.keys_path)
             write_pickle({}, self.main_path)
             
 
@@ -98,7 +100,7 @@ class TestDataDB:
         filepath = os.path.join(self.root, self.keys_dict[key])
         # remove key
         self.keys_dict.pop(key)
-        write_json(self.keys_path, self.keys_dict, indent=4)
+        write_json(self.keys_dict, self.keys_path)
         # remove data
         filedata = read_pickle(filepath)
         filedata.pop(key)
@@ -110,7 +112,7 @@ class TestDataDB:
         # rename key
         self.keys_dict[new_key] = self.keys_dict[key]
         self.keys_dict.pop(key)
-        write_json(self.keys_path, self.keys_dict, indent=4)
+        write_json(self.keys_dict, self.keys_path)
         # rename data
         filedata = read_pickle(filepath)
         filedata[new_key] = filedata[key]
@@ -132,7 +134,7 @@ class TestDataDB:
                     raise Exception(f"remove file {filepath} failed")
                 deleted_files.append(filepath)
                 print(f"remove file {filepath} successed")
-        write_json(self.keys_path, self.keys_dict, indent=4) # 写键，键和数据必须同时操作
+        write_json(self.keys_dict, self.keys_path) # 写键，键和数据必须同时操作
         return deleted_files
     def archive(self):
         if os.name == 'posix':
@@ -163,9 +165,8 @@ class TestDataDB:
             data = read_pickle(os.path.join(root, filepath))[key]
             self.set(key, data)
 
-def convert_type(data, typeinfo=False):
-    """
-    将复杂数据类型转至多包含 ndarray 的简单数据类型
+def convert_type(data, typeinfo: bool = False):
+    """将复杂数据类型转至多包含 ndarray 的简单数据类型
     Args:
         typeinfo: 是否保留原始类型信息
     """
@@ -174,7 +175,7 @@ def convert_type(data, typeinfo=False):
     elif isinstance(data, list):
         return [convert_type(i, typeinfo) for i in data]
     elif isinstance(data, tuple):
-        return tuple([convert_type(i, typeinfo) for i in list(data)]) # 转成 list 才支持遍历
+        return tuple([convert_type(i, typeinfo) for i in data]) # 转成 list 才支持执行
     elif 'torch.Tensor' in str(type(data)):
         newdata = data.detach().cpu().numpy()
         return ({'typeinfo': str(type(data))}, newdata) if typeinfo else newdata
@@ -191,7 +192,6 @@ def convert_type(data, typeinfo=False):
         newdata = ({'typeinfo': str(type(data))}, vars(data)) if typeinfo else vars(data)
         return convert_type(newdata, typeinfo)
     return data
-
 def remove_typeinfo(data):
     if isinstance(data, dict):
         return {k:remove_typeinfo(v) for k, v in data.items()}

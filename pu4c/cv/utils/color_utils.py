@@ -29,7 +29,7 @@ color_det_class25 = [
     [0.0, 0.0, 0.5],
 ]
 
-def plot_color_list(color_rgb_list, strip_height=10, width=100):
+def plot_color_list(color_rgb_list, strip_height: int = 10, width: int = 100):
     from matplotlib import pyplot as plt
     height = len(color_rgb_list) * strip_height
     img_grey = np.zeros((height, width, 1), dtype=np.uint8)
@@ -42,11 +42,10 @@ def plot_color_list(color_rgb_list, strip_height=10, width=100):
     plt.imshow(img_rgb)
 
 # rviz 点云反射率颜色映射 modified from getRainbowColor() in https://github.com/ros-visualization/rviz/blob/noetic-devel/src/rviz/default_plugin/point_cloud_transformers.cpp
-def rviz_intensity_colormap(intensity, in_norm=None, out_norm=False):
-    """
-    将反射率映射为 rgb 数组
+def rviz_intensity_colormap(intensity: np.ndarray, in_norm: bool = None, out_norm: bool = False):
+    """将反射率映射为 rgb 数组
     Args:
-        intensity: (N,) ndarray
+        intensity (ndarray(N,)): 反射率
         in_norm: None 则推断，True/False 则表示输入数据已经/没有归一化
     """
     if in_norm is None:

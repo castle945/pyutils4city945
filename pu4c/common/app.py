@@ -1,3 +1,4 @@
+from typing import Any, Union, Optional, Dict, List, Tuple
 import pu4c.config as cfg
 from .utils.common_utils import rpc_func, convert_type
 
@@ -29,7 +30,7 @@ def start_rpc_server():
     server = ThreadedServer(RPCService, port=cfg.rpc_server_port, auto_register=True)
     server.start()
 
-def create_logger(log_file=None):
+def create_logger(log_file: str = None):
     import logging
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
@@ -46,13 +47,18 @@ def create_logger(log_file=None):
     logger.propagate = False
     return logger
 
-def deep_equal(var1, var2, tol=None, ignore_keys=[], ignore_indices=[], complex_type=False):
-    """
-    比较两个复杂变量是否相等，支持 dict, list, ndarray 等类型的嵌套
+def deep_equal(
+    var1, var2,
+    tol: Tuple[float, float] = None,
+    ignore_keys: List[str] = [],
+    ignore_indices: List[Union[int, List]] = [],
+    complex_type: bool = False,
+) -> bool:
+    """比较两个复杂变量是否相等，支持 dict/list/ndarray 等类型的嵌套
     Args:
-        ignore_keys: list, 忽略字典中的键，即某些无关紧要的项
-        ignore_indices: list of list, 忽略列表或元组中某些索引，即某些无关紧要的异常值，例如 [1,[2,[3,4]]] 表示忽略掉遇到的第一层列表下标为 1 的项、第二层列表下标为 2 的项、第三层列表下标为 3,4 的项
-        tol: tuple, (atol, rtol) 数值比较的容忍度
+        tol (tuple(atol, rtol)): 数值比较的容忍度，例如容许 0.01 级别的误差可设置为 (1e-2, 0)，即设置绝对误差即可
+        ignore_keys: 忽略比较字典中某些键
+        ignore_indices (list[int | list]): 忽略比较列表或元组中某些索引，例如 [1,[2,[3,4]]] 表示忽略掉遇到的第一层列表下标为 1 的项、第二层列表下标为 2 的项、第三层列表下标为 3,4 的项
         complex_type: 是否为复杂数据类型，即包括非 Python 内置类型或 numpy 类型
     """
     import numpy as np
@@ -148,13 +154,18 @@ def deep_equal(var1, var2, tol=None, ignore_keys=[], ignore_indices=[], complex_
         rich.print(f"reason: {reason}")
     return is_equal
 @rpc_func
-def printds(data, complex_type=False, reduce=True, decimals=2, max_len=10, rpc=False):
-    """
-    打印复杂结构体，支持 dict, list, ndarray 等类型的嵌套，由于 VSCode 调试终端中打印效果变差，增加远程调用支持
+def printds(
+    data, 
+    reduce: bool = True, max_len: int = 10, 
+    decimals: int = 2, 
+    complex_type: bool = False, 
+    rpc: bool = False,
+) -> None:
+    """打印复杂结构体，支持 dict/list/ndarray 等类型的嵌套，由于 VSCode 调试终端中打印效果变差，增加远程调用支持
     Args:
         reduce: 是否缩减列表项，即只打印列表中的一项数据
-        decimals: 保留的小数点位数
         max_len: 列表或一维数组最大长度，超过此值则缩减
+        decimals: 保留的小数点位数
     """
     from rich import print as rprint
     import numpy as np
